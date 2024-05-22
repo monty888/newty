@@ -3,31 +3,22 @@ import asyncio
 from PySide2.QtWidgets import (
     QWidget,
     QVBoxLayout,
-    QHBoxLayout,
     QLabel,
-    QTextEdit,
-    QPushButton,
-    QSizePolicy,
     QFormLayout,
     QLineEdit,
-    QTextEdit,
-    QSpacerItem
+    QTextEdit
 )
 
 from PySide2.QtGui import (
     QPixmap,
-    Qt,
-    QPaintEvent,
-    QPainter
+    Qt
 )
 
-from monstr.ident.event_handlers import NetworkedProfileEventHandler
-from monstr_qt.gui.panes.panes import ViewPane
-from monstr_qt.gui.nostr import Location
-from monstr_qt.util import ResourceFetcher
-from monstr_qt.gui.nostr import VerticalScrollArea
+from newty.gui.panes.panes import ViewPane
+from newty.gui.nostr import Location
+from newty.util import ResourceFetcher
+from newty.gui.nostr import VerticalScrollArea
 from monstr.ident.profile import Profile
-from monstr.client.client import Client
 from monstr.encrypt import Keys
 
 

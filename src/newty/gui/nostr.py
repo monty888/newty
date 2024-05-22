@@ -3,34 +3,22 @@ from PySide2.QtWidgets import (
     QWidget,
     QVBoxLayout,
     QHBoxLayout,
-    QTextEdit,
     QLabel,
-    QSizePolicy,
     QPushButton,
     QScrollArea,
-    QDialog,
     QLineEdit,
     QStyle
 )
 
 from PySide2.QtGui import (
     QPixmap,
-    Qt,
-    QPaintEvent,
-    QPainter
+    Qt
 )
 
-from qasync import asyncClose
-from monstr.client.client import Client
-from monstr.client.event_handlers import EventAccepter
-from monstr.event.event import Event
-from monstr.ident.event_handlers import ProfileEventHandlerInterface, NetworkedProfileEventHandler
-from monstr.ident.profile import Profile
-from monstr.util import util_funcs
+from monstr.ident.event_handlers import NetworkedProfileEventHandler
 from monstr.encrypt import Keys
-from monstr_qt.gui.layout import FlowLayout
-from monstr_qt.util import ResourceFetcher
-from monstr_qt.gui.util import mask_image
+from newty.util import ResourceFetcher
+from newty.gui.util import mask_image
 
 
 class VerticalScrollArea(QScrollArea):

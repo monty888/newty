@@ -1,11 +1,10 @@
 from abc import abstractmethod
 from PySide2.QtWidgets import (
     QWidget,
-    QVBoxLayout,
-    QLabel
+    QVBoxLayout
 )
 
-from monstr_qt.gui.nostr import Location
+from newty.gui.nostr import Location
 
 
 class ViewPane(QWidget):

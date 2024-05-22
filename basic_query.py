@@ -432,7 +432,7 @@ class MainWindow(QWidget):
         return f'<div><span style="color:blue">{user}</span>@{evt.created_at}</div>{content}<br>'
 
     async def _json_event_print(self, evt: Event, profile_handler=None, **kargs) -> str:
-        return str(evt.event_data())
+        return str(evt.data())
 
     def _stop_runnning_query(self):
         self._query_client.end()

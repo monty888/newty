@@ -10,12 +10,11 @@ from monstr.event.event_handlers import EventHandler
 from monstr.ident.event_handlers import NetworkedProfileEventHandler
 import qasync
 from qasync import asyncSlot, asyncClose, QApplication
-from monstr_qt.util import ResourceFetcher
-from monstr_qt.gui.nostr import AddressBarPane, Location, LocationSource
-from monstr_qt.gui.panes.panes import ViewPane
-from monstr_qt.gui.panes.event import EventViewPane
-from monstr_qt.gui.panes.profile import ProfileViewPane
-from monstr.encrypt import Keys
+from newty.util import ResourceFetcher
+from newty.gui.nostr import AddressBarPane, Location, LocationSource
+from newty.gui.panes.panes import ViewPane
+from newty.gui.panes.event import EventViewPane
+from newty.gui.panes.profile import ProfileViewPane
 
 import PySide2
 # from PyQt5.QtWidgets import (

@@ -1,10 +1,4 @@
-from abc import abstractmethod, ABC
-from monstr.encrypt import Keys
-from monstr.client.event_handlers import EventAccepter
-from monstr.ident.event_handlers import NetworkedProfileEventHandler
-
 # probably we move these eventually into monstr
-from monstr_qt.gui.event.acceptors import PostsOnlyAcceptor, RepliesOnlyAcceptor
 
 
 # class DynamicFilter(ABC):

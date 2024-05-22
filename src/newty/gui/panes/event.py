@@ -1,7 +1,6 @@
 import asyncio
 from abc import ABC, abstractmethod
 from functools import partial
-from typing import Dict
 
 from PySide2.QtWidgets import (
     QWidget,
@@ -25,11 +24,12 @@ from monstr.ident.profile import Profile
 from monstr.encrypt import Keys
 from monstr.ident.event_handlers import NetworkedProfileEventHandler, ProfileEventHandlerInterface
 from monstr.util import util_funcs
-from monstr_qt.util import ResourceFetcher
-from monstr_qt.gui.nostr import VerticalScrollArea, FlowLayout, LabelWithRemoteImage
-from monstr_qt.gui.panes.panes import ViewPane
-from monstr_qt.gui.nostr import Location
-from monstr_qt.gui.event.acceptors import PostsOnlyAcceptor, RepliesOnlyAcceptor
+from newty.util import ResourceFetcher
+from newty.gui.layout import FlowLayout
+from newty.gui.nostr import VerticalScrollArea, LabelWithRemoteImage
+from newty.gui.panes.panes import ViewPane
+from newty.gui.nostr import Location
+from newty.gui.event.acceptors import PostsOnlyAcceptor, RepliesOnlyAcceptor
 # from monstr_qt.gui.event.views import CurrentUserFollowsPostsFilter, CurrentUserFollowsThreadsFilter
 
 
