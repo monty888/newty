@@ -11,7 +11,8 @@ pip install .
 ```
 
 # basic query
-Make basic query request to nostr relays.
+Make basic query request to nostr relays.  
+
 ![nostr basic query tool](basic_query.png) 
 ```shell
 python basic_query.py
