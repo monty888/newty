@@ -1,0 +1,63 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "newty"
+dynamic = ["version"]
+description = ''
+readme = "README.md"
+requires-python = ">=3.8"
+license = "MIT"
+keywords = []
+authors = [
+  { name = "monty", email = "monty@monty888.com" },
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: Implementation :: CPython",
+  "Programming Language :: Python :: Implementation :: PyPy",
+]
+dependencies = [
+  "monstr>=0.1.2",
+]
+
+[project.urls]
+Documentation = "https://github.com/monty888/newty/blob/main/README.md"
+Issues = "https://github.com/monty888/newty/issues"
+Source = "https://github.com/monty888/newty"
+
+[tool.hatch.version]
+path = "src/newty/__about__.py"
+
+[tool.hatch.envs.types]
+extra-dependencies = [
+  "mypy>=1.0.0",
+]
+[tool.hatch.envs.types.scripts]
+check = "mypy --install-types --non-interactive {args:src/newty tests}"
+
+[tool.coverage.run]
+source_pkgs = ["newty", "tests"]
+branch = true
+parallel = true
+omit = [
+  "src/newty/__about__.py",
+]
+
+[tool.coverage.paths]
+newty = ["src/newty", "*/newty/src/newty"]
+tests = ["tests", "*/newty/tests"]
+
+[tool.coverage.report]
+exclude_lines = [
+  "no cov",
+  "if __name__ == .__main__.:",
+  "if TYPE_CHECKING:",
+]
