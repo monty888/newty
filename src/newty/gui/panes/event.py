@@ -22,6 +22,7 @@ from monstr.client.event_handlers import EventAccepter
 from monstr.event.event import Event
 from monstr.ident.profile import Profile
 from monstr.encrypt import Keys
+from monstr.signing.signing import SignerInterface, BasicKeySigner
 from monstr.ident.event_handlers import NetworkedProfileEventHandler, ProfileEventHandlerInterface
 from monstr.util import util_funcs
 from newty.util import ResourceFetcher
@@ -97,6 +98,7 @@ class BasicEventDisplay(QWidget):
                  callback,
                  profile_handler:ProfileEventHandlerInterface = None,
                  resource_loader: ResourceFetcher = None,
+                 # should accept keys or a signer
                  current_user: Keys = None,
                  **kargs):
         super(BasicEventDisplay, self).__init__(*args, **kargs)
@@ -105,6 +107,9 @@ class BasicEventDisplay(QWidget):
         self._profile_handler = profile_handler
         self._callback = callback
         self._current_user = current_user
+        self._signer = None
+        if current_user and current_user.private_key_hex() is not None:
+            self._signer = BasicKeySigner(current_user)
 
         # self._scaled_pixmap_cache = LRUCache(maxsize=10000)
 
@@ -118,9 +123,11 @@ class BasicEventDisplay(QWidget):
         # three sections header, main body(content) and footer (actions?)
         self._create_panes()
         # create the widgets and fill with event data (that we have now)
-        self._create_widgets()
+        asyncio.create_task(self._create_widgets())
 
         self.setLayout(self._event_layout)
+
+
 
     def _create_panes(self):
         # create title container
@@ -156,11 +163,11 @@ class BasicEventDisplay(QWidget):
         self._hash_pane.setLayout(self._hash_layout)
         self._foot_layout.addWidget(self._hash_pane)
 
-
-    def _create_widgets(self):
+    async def _create_widgets(self):
         author_k = self._event.pub_key
         author_p: Profile = None
 
+        #TODO - change to aget_profile?
         if self._profile_handler and self._profile_handler.have_profile(author_k):
             author_p = self._profile_handler.get_profile(author_k)
 
@@ -181,10 +188,9 @@ class BasicEventDisplay(QWidget):
         # create text widget and fill with event content
         evt_content = self._event.content
         if self._event.kind == Event.KIND_ENCRYPT \
-                and self._current_user is not None and self._current_user.private_key_hex():
+                and self._signer:
             try:
-                evt_content = Event.decrypt_nip4(evt=self._event,
-                                                 keys=self._current_user).content
+                evt_content = (await self._signer.nip4_decrypt_event(self._event)).content
             except Exception as e:
                 print(e)
                 # TODO fix monstr exception text this leaks private key!!!

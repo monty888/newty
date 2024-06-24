@@ -26,10 +26,10 @@ class ResourceFetcher:
                 timeout = 10.0
                 wait_time = 0
                 while url not in self._cache:
-                    await asyncio.sleep(1)
-                    wait_time += 1.0
                     if wait_time >= timeout:
                         raise Exception(f'timeout loading resource {url}')
+                    await asyncio.sleep(0.1)
+                    wait_time += 0.1
 
                 # if we didn't throw it should exist by now
                 ret = self._cache[url]

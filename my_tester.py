@@ -15,6 +15,7 @@ from newty.gui.nostr import AddressBarPane, Location, LocationSource
 from newty.gui.panes.panes import ViewPane
 from newty.gui.panes.event import EventViewPane
 from newty.gui.panes.profile import ProfileViewPane
+from newty.gui.dialogs.account import AccountManager
 
 import PySide2
 # from PyQt5.QtWidgets import (
@@ -107,6 +108,11 @@ class MainWindow(QWidget):
         self._image_test.clicked.connect(partial(self.on_btnFetch_clicked, self._image_test))
         self._layout.addWidget(self._image_test)
 
+        # basic account / key management
+        self._account_manager = QPushButton('account manager')
+        self._account_manager.clicked.connect(partial(self.on_btnFetch_clicked, self._account_manager))
+        self._layout.addWidget(self._account_manager)
+
         self._client = Client('wss://nos.lol')
         self._profile_handler = NetworkedProfileEventHandler(client=self._client)
 
@@ -151,12 +157,12 @@ class MainWindow(QWidget):
         elif args[0] == self._scroll_test:
             # EventViewDialog().exec_()
             EventViewWindow().show()
-
-
         elif args[0] == self._image_test:
             print('mother fucker')
             ImageView().exec_()
-
+        elif args[0] == self._account_manager:
+            acc_manger = AccountManager()
+            asyncio.create_task(acc_manger.ashow())
 
     @asyncSlot()
     async def _authors_accepted(self):
@@ -172,13 +178,13 @@ class MainWindow(QWidget):
     #     return await future
 
 
-class AuthorCombo(QComboBox):
-
-    def __init__(self, *args, **kargs):
-        super().__init__(*args, **kargs)
-
-    def paintEvent(self, event):
-        super(AuthorCombo, self).paintEvent(event)
+# class AuthorCombo(QComboBox):
+#
+#     def __init__(self, *args, **kargs):
+#         super().__init__(*args, **kargs)
+#
+#     def paintEvent(self, event):
+#         super(AuthorCombo, self).paintEvent(event)
 
 
 # class SimpleDataItem(QStandardItem):
@@ -525,6 +531,8 @@ class ImageView(QDialog):
         data = await self._loader.get(self._url_text.text())
         self._image.loadFromData(data)
         self._image_lbl.setPixmap(self._image.scaled(64,64))
+        self.repaint()
+        print('why so slow...')
 
 
 class SelectUser(QDialog):
@@ -723,14 +731,14 @@ async def main():
     # view.resize(1024, 750)
     # view.show()
 
+    MainWindow().show()
+    # acc = AccountManager()
+    # acc.show()
 
     if hasattr(app, "aboutToQuit"):
         getattr(app, "aboutToQuit").connect(
             partial(close_future, future, loop)
         )
-
-    mainWindow = TestWindow()
-    mainWindow.show()
 
     await future
     return True
