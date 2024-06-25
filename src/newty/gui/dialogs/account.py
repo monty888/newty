@@ -20,7 +20,7 @@ from PySide2.QtWidgets import (
     QAbstractItemView,
     QTabWidget,
     QListWidget,
-    QListWidgetItem
+    QListWidgetItem, QGridLayout
 
 )
 from PySide2.QtGui import Qt
@@ -110,7 +110,7 @@ class AccountManager(QWidget):
         self._key_store = self.get_sqlite_key_store(db_file=WORK_DIR + KEY_STORE_DB_FILE)
 
         self.setFixedWidth(400)
-        self.setFixedHeight(200)
+        self.setFixedHeight(400)
         self.show()
         self._password_dialog = PasswordDialog(parent=self)
 
@@ -124,13 +124,74 @@ class AccountManager(QWidget):
         self.setWindowTitle('Account management')
         self._layout = QVBoxLayout()
         self.setLayout(self._layout)
-        self._acc_list = QListWidget()
+        self._tabs = QTabWidget()
+
+        tab1 = QWidget()
+        tab1_layout = QVBoxLayout()
+        tab1.setLayout(tab1_layout)
+
+        settings_con = QWidget()
+        settings_con_layout = QGridLayout()
+        settings_con_layout.setColumnStretch(1, 2)
+        settings_con_layout.setColumnMinimumWidth(0, 120)
+        settings_con.setLayout(settings_con_layout)
+
+        file_lbl = QLabel('file')
+        file = QLineEdit()
+        file_lbl.setBuddy(file)
+        settings_con_layout.addWidget(file_lbl,0,0, alignment=Qt.AlignTop)
+        settings_con_layout.addWidget(file,0,1, alignment=Qt.AlignTop)
+
+        password_lbl = QLabel('password')
+        password = QLineEdit()
+        password_lbl.setBuddy(file)
+        settings_con_layout.addWidget(password_lbl, 1, 0, alignment=Qt.AlignTop)
+        settings_con_layout.addWidget(password, 1, 1, alignment=Qt.AlignTop)
+
+        tab1_layout.addWidget(settings_con)
+        settings_con_layout.setRowStretch(2, 1)
+
+        self._tabs.addTab(tab1, 'settings')
         # self._url_text = QLineEdit(placeholderText='something')
-        self._layout.addWidget(self._acc_list)
+        self._layout.addWidget(self._tabs)
+
+
+        tab2 = QWidget()
+        tab2_layout = QVBoxLayout()
+        tab2.setLayout(tab2_layout)
+
+        sel_view_con = QWidget()
+        sel_view_con_layout = QHBoxLayout()
+        sel_view_con.setLayout(sel_view_con_layout)
+        sel_view_con_layout.addWidget(QLabel('about current selection'))
+        tab2_layout.addWidget(sel_view_con)
+
+        self._acc_list = QListWidget()
+        self._acc_list.itemSelectionChanged.connect(self.account_select)
+        tab2_layout.addWidget(self._acc_list)
+
+        self._new_btn = QPushButton('New')
+        self._new_btn.clicked.connect(self.new_account)
+        tab2_layout.addWidget(self._new_btn)
+
+
+        self._tabs.addTab(tab2, 'accounts')
+        # self._url_text = QLineEdit(placeholderText='something')
+        self._layout.addWidget(self._tabs)
 
     def closeEvent(self, event):
         self._run = False
         self._password_dialog.close()
+
+    def new_account(self):
+        print('do what needs to be done for new account!!!')
+
+    def account_select(self):
+        selected_items = self._acc_list.selectedItems()
+        if selected_items:
+            print(selected_items[0].data(Qt.UserRole))
+        else:
+            print('no selection')
 
     def get_sqlite_key_store(self, db_file: str, password: str = None):
         # human alias to keys
@@ -160,6 +221,7 @@ class AccountManager(QWidget):
             c_acc: NamedKeys
             for c_acc in accounts:
                 item = QListWidgetItem(util_funcs.str_tails(c_acc.public_key_hex()).ljust(20) + c_acc.name.ljust(44))
+                item.setData(Qt.UserRole, c_acc)
                 self._acc_list.addItem(item)
 
             while self.isVisible():
