@@ -1,5 +1,6 @@
 import asyncio
 import qasync
+from PySide2.QtCore import QSize
 from qasync import asyncSlot, asyncClose, QApplication
 from monstr.ident.keystore import NamedKeys
 from monstr.util import util_funcs
@@ -20,10 +21,12 @@ from PySide2.QtWidgets import (
     QAbstractItemView,
     QTabWidget,
     QListWidget,
-    QListWidgetItem, QGridLayout
+    QListWidgetItem, QGridLayout, QSizePolicy, QFrame, QTextEdit
 
 )
 from PySide2.QtGui import Qt
+from PySide2.QtGui import QFont
+from PySide2.QtCore import Signal
 
 from pathlib import Path
 from getpass import getpass
@@ -98,6 +101,110 @@ class PasswordDialog(QDialog):
 #     return SQLiteKeyStore(file_name=db_file,
 #                           encrypter=key_enc)
 
+class ClickableLabel(QLabel):
+    clicked = Signal()
+
+    def __init__(self,
+                 *args, **kargs):
+        super(ClickableLabel, self).__init__(*args, **kargs)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.clicked.emit()
+
+class ToggleLabel(ClickableLabel):
+    def __init__(self,
+                 *args, **kargs):
+        super(ClickableLabel, self).__init__(*args, **kargs)
+
+        self._view_idx = 0
+        self._values = []
+
+    @property
+    def values(self) -> list:
+        return self._values
+
+    @values.setter
+    def values(self, values: list):
+        self._values = values
+        self._view_idx  = 0
+        self.setText(self._values[0])
+
+    def toggle(self):
+        self._view_idx += 1
+        if self._view_idx >= len(self._values):
+            self._view_idx = 0
+        self.setText(self._values[self._view_idx])
+
+
+class AccountViewBasic(QWidget):
+
+    def __init__(self,
+                 *args, **kargs):
+        super(AccountViewBasic, self).__init__(*args, **kargs)
+
+        self._account: NamedKeys = None
+        # self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        # self.sizePolicy().se
+        self.create_gui()
+
+    def create_gui(self):
+        self._layout = QVBoxLayout()
+        self.setLayout(self._layout)
+        self._layout.setContentsMargins(0,0,0,0)
+
+        self._no_selection_pane = QWidget()
+        self._no_selection_pane_layout = QVBoxLayout()
+        self._no_selection_pane_layout.setContentsMargins(0,0,0,0)
+        self._no_selection_pane.setLayout(self._no_selection_pane_layout)
+        self._layout.addWidget(self._no_selection_pane)
+        self._no_selection_pane_layout.addWidget(QLabel('no account selected'))
+
+        self._no_profile_pane = QWidget(visible=False)
+        self._no_profile_pane_layout = QVBoxLayout()
+        self._no_profile_pane_layout.setContentsMargins(0, 0, 0, 0)
+        self._no_profile_pane.setLayout(self._no_profile_pane_layout)
+        self._layout.addWidget(self._no_profile_pane)
+
+        font = QFont()
+        font.setBold(True)
+        self._profile_name_lbl = QLabel()
+        self._profile_name_lbl.setFont(font)
+        self._no_profile_pane_layout.addWidget(self._profile_name_lbl)
+        self._profile_pub_k_lbl = ToggleLabel()
+        self._profile_pub_k_lbl.clicked.connect(self._key_clicked)
+        self._no_profile_pane_layout.addWidget(self._profile_pub_k_lbl)
+
+
+        #
+        #
+        # self._with_profile_pane = QWidget(visible=False)
+        # self.setMaximumSize(self.sizeHint())
+
+    def _key_clicked(self):
+        self._profile_pub_k_lbl.toggle()
+
+    def sizeHint(self):
+        return self._layout.sizeHint()
+
+    @property
+    def account(self) -> NamedKeys:
+        return self._pub_k
+
+    @account.setter
+    def account(self, account: NamedKeys):
+        self._account = account
+        if account is None:
+            self._no_selection_pane.setVisible(True)
+            self._no_profile_pane.setVisible(False)
+        else:
+            self._profile_name_lbl.setText(account.name)
+            self._profile_pub_k_lbl.setText(account.public_key_hex())
+            self._profile_pub_k_lbl.values = [account.public_key_hex(),
+                                              account.public_key_bech32()]
+            self._no_selection_pane.setVisible(False)
+            self._no_profile_pane.setVisible(True)
+
 
 class AccountManager(QWidget):
 
@@ -118,8 +225,8 @@ class AccountManager(QWidget):
         self._key_store = SQLiteKeyStore(file_name=WORK_DIR+ KEY_STORE_DB_FILE,
                                          encrypter=self._key_enc)
 
-        self.setFixedWidth(400)
-        self.setFixedHeight(400)
+        self.setFixedWidth(540)
+        self.setFixedHeight(480)
         self.show()
         self._password_dialog = PasswordDialog(parent=self)
 
@@ -143,7 +250,7 @@ class AccountManager(QWidget):
         settings_con = QWidget()
         settings_con_layout = QGridLayout()
         settings_con_layout.setColumnStretch(1, 2)
-        settings_con_layout.setColumnMinimumWidth(0, 120)
+        settings_con_layout.setColumnMinimumWidth(0, 140)
         settings_con.setLayout(settings_con_layout)
 
         file_lbl = QLabel('file')
@@ -180,11 +287,13 @@ class AccountManager(QWidget):
         self._tab2_err_con.setLayout(tab2_err_con_layout)
         tab2_layout.addWidget(self._tab2_err_con)
 
-        sel_view_con = QWidget()
-        sel_view_con_layout = QHBoxLayout()
-        sel_view_con.setLayout(sel_view_con_layout)
-        sel_view_con_layout.addWidget(QLabel('about current selection'))
-        tab2_main_con_layout.addWidget(sel_view_con)
+        # sel_view_con = QWidget()
+        # sel_view_con_layout = QVBoxLayout()
+        # sel_view_con.setLayout(sel_view_con_layout)
+        # sel_view_con_layout.addWidget(QLabel('about current selection'))
+        self._acc_view_basic = AccountViewBasic()
+        tab2_main_con_layout.addWidget(self._acc_view_basic)
+        # tab2_main_con_layout.addWidget(QWidget())
 
         self._acc_list = QListWidget()
         self._acc_list.itemSelectionChanged.connect(self.account_select)
@@ -212,9 +321,9 @@ class AccountManager(QWidget):
     def account_select(self):
         selected_items = self._acc_list.selectedItems()
         if selected_items:
-            print(selected_items[0].data(Qt.UserRole))
+            self._acc_view_basic.account = selected_items[0].data(Qt.UserRole)
         else:
-            print('no selection')
+            self._acc_view_basic.account = None
 
     def _password_changed(self):
         self._key_enc.clear_key()
