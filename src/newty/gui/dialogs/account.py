@@ -3,6 +3,7 @@ import qasync
 from PySide2.QtCore import QSize
 from qasync import asyncSlot, asyncClose, QApplication
 from monstr.ident.keystore import NamedKeys
+from monstr.encrypt import Keys
 from monstr.util import util_funcs
 import PySide2
 # from PyQt5.QtWidgets import (
@@ -25,8 +26,8 @@ from PySide2.QtWidgets import (
 
 )
 from PySide2.QtGui import Qt
-from PySide2.QtGui import QFont
-from PySide2.QtCore import Signal
+from PySide2.QtGui import QFont, QFontDatabase, QValidator
+from PySide2.QtCore import Signal, QRegExp
 
 from pathlib import Path
 from getpass import getpass
@@ -40,66 +41,45 @@ WORK_DIR = f'{Path.home()}/.nostrpy/'
 KEY_STORE_DB_FILE = 'keystore.db'
 
 
-class PasswordDialog(QDialog):
-
-    def __init__(self,
-                 *args, **kargs):
-
-        super(PasswordDialog, self).__init__(*args, **kargs)
-        self.create_gui()
-        self._accepted = False
-
-    def create_gui(self):
-        self.setWindowTitle('Keystore access')
-        self._layout = QVBoxLayout()
-        self.setLayout(self._layout)
-
-        self._password_txt = QLineEdit(placeholderText='password')
-        self._layout.addWidget(self._password_txt)
-
-        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-
-        bb.accepted.connect(self.accept)
-        bb.rejected.connect(self.reject)
-        self._layout.addWidget(bb)
-
-    async def ashow(self):
-        # self.show()
-        # while self.isVisible():
-        #     await asyncio.sleep(0.1)
-        loop = asyncio.get_event_loop()
-        self.setModal(True)  # Make the dialog modal
-        result = await loop.run_in_executor(None, self.exec_)
-        return result
-
-    @property
-    def password(self) -> str:
-        return self._password_txt.text()
-
-    @asyncClose
-    async def closeEvent(self, event):
-        self.finished.emit(0)
-
-
-# def get_sqlite_key_store(db_file, password: str = None):
-#     # human alias to keys
-#     # keystore for user key aliases
-#     # TMP - borrowed from terminal - obvs we want to show a dialog
-#     async def get_key() -> str:
-#         ret = password
-#         if password is None:
-#             future = asyncio.Future()
-#             dialog = PasswordDialog()
-#             dialog.finished.connect(lambda r: future.set_result(r))
-#             dialog.show()
-#             await future
-#             dialog.hide()
-#             return ''
-#         return ret
+# class PasswordDialog(QDialog):
 #
-#     key_enc = KeyDataEncrypter(get_key=get_key)
-#     return SQLiteKeyStore(file_name=db_file,
-#                           encrypter=key_enc)
+#     def __init__(self,
+#                  *args, **kargs):
+#
+#         super(PasswordDialog, self).__init__(*args, **kargs)
+#         self.create_gui()
+#         self._accepted = False
+#
+#     def create_gui(self):
+#         self.setWindowTitle('Keystore access')
+#         self._layout = QVBoxLayout()
+#         self.setLayout(self._layout)
+#
+#         self._password_txt = QLineEdit(placeholderText='password')
+#         self._layout.addWidget(self._password_txt)
+#
+#         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+#
+#         bb.accepted.connect(self.accept)
+#         bb.rejected.connect(self.reject)
+#         self._layout.addWidget(bb)
+#
+#     async def ashow(self):
+#         # self.show()
+#         # while self.isVisible():
+#         #     await asyncio.sleep(0.1)
+#         loop = asyncio.get_event_loop()
+#         self.setModal(True)  # Make the dialog modal
+#         result = await loop.run_in_executor(None, self.exec_)
+#         return result
+#
+#     @property
+#     def password(self) -> str:
+#         return self._password_txt.text()
+#
+#     @asyncClose
+#     async def closeEvent(self, event):
+#         self.finished.emit(0)
 
 class ClickableLabel(QLabel):
     clicked = Signal()
@@ -111,6 +91,232 @@ class ClickableLabel(QLabel):
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
             self.clicked.emit()
+
+
+# class ClickableLineEdit(QLineEdit):
+#     clicked = Signal()
+#
+#     def __init__(self,
+#                  *args, **kargs):
+#         super(ClickableLineEdit, self).__init__(*args, **kargs)
+#         # done slightly different to label as we want to get the clicks when the input is disabled
+#         self.installEventFilter(self)
+#
+#     def eventFilter(self, source, event):
+#         if event.type() == event.MouseButtonPress and source == self:
+#             # only when disabled, assume when enabled we'd always just want normal input actions?
+#             if not self.isEnabled() and event.button() == Qt.LeftButton:
+#                 self.clicked.emit()
+#                 return True
+#         return super().eventFilter(source, event)
+
+
+class SimpleTextValidator(QValidator):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.allowed_characters = QRegExp("[a-zA-Z0-9_]+")  # Allow letters, digits, and underscore
+
+    def validate(self, input_str, pos):
+        if self.allowed_characters.exactMatch(input_str):
+            return self.Acceptable, input_str, pos
+        elif input_str == "":
+            return self.Intermediate, input_str, pos
+        else:
+            return self.Invalid, input_str, pos
+
+
+# class KeyTextValidator(QValidator):
+#     def __init__(self, parent=None):
+#         super().__init__(parent)
+#
+#         self.allowed_prefix = QRegExp("[npuscNPUSC0-9A-Fa-f]+")
+#         self.allowed_key = QRegExp("[0-9A-Fa-f]+")
+#
+#     def validate(self, input_str, pos):
+#         prefix = input_str[:4]
+#         the_rest = input_str[4:]
+#         print('a',self.allowed_prefix.exactMatch(prefix), prefix)
+#         print('b',self.allowed_key.exactMatch(the_rest), the_rest)
+#
+#         if self.allowed_prefix.exactMatch(prefix) and (the_rest=='' or self.allowed_key.exactMatch(the_rest)):
+#             return self.Acceptable, input_str, pos
+#         elif input_str == "":
+#             return self.Intermediate, input_str, pos
+#         else:
+#             return self.Invalid, input_str, pos
+
+
+class NewAccountDialog(QDialog):
+
+    OP_GEN_NEW = 'generate new'
+    OP_EXISTING = 'existing nsec/npub'
+
+    def __init__(self,
+                 *args, **kargs):
+
+        super(NewAccountDialog, self).__init__(*args, **kargs)
+        self.setMinimumWidth(610)
+        self.create_gui()
+        self._generated_keys = None
+        self._regen_key()
+        self._setView()
+
+    def create_gui(self):
+        self.setWindowTitle('Add account')
+        self._layout = QVBoxLayout()
+        self.setLayout(self._layout)
+
+        # account name and entry type drop down
+        con1 = QWidget()
+        con1_layout = QGridLayout()
+        con1_layout.setContentsMargins(0, 0, 0, 0)
+        con1_layout.setColumnStretch(1, 2)
+        con1_layout.setColumnMinimumWidth(0, 80)
+        con1.setLayout(con1_layout)
+
+        name_lbl = QLabel('name')
+        self._name_in = QLineEdit(validator=SimpleTextValidator())
+        name_lbl.setBuddy(self._name_in)
+        con1_layout.addWidget(name_lbl, 0, 0, alignment=Qt.AlignTop)
+        con1_layout.addWidget(self._name_in, 0, 1, alignment=Qt.AlignTop)
+
+        type_lbl = QLabel('type')
+        self._type_drop = QComboBox()
+        self._type_drop.addItems([self.OP_GEN_NEW,
+                                  self.OP_EXISTING])
+        self._type_drop.currentIndexChanged.connect(self._type_changed)
+
+        type_lbl.setBuddy(self._type_drop)
+        con1_layout.addWidget(type_lbl, 1, 0, alignment=Qt.AlignTop)
+        con1_layout.addWidget(self._type_drop, 1, 1, alignment=Qt.AlignTop)
+
+        self._layout.addWidget(con1)
+
+        # nsec and npub entry - nsec only editable if existing nsec
+        # clicking either when in generate mode should randomly generate another key
+        con2 = QWidget()
+        con2_layout = QGridLayout()
+        con2_layout.setContentsMargins(0, 0, 0, 0)
+        con2_layout.setColumnStretch(1, 2)
+        con2_layout.setColumnMinimumWidth(0, 80)
+        con2.setLayout(con2_layout)
+
+        mono_font = QFontDatabase.systemFont(QFontDatabase.FixedFont)
+
+        # lbl style nsec - shows if gen new
+        self._nsec_lbl = ClickableLabel('nsec')
+        self._nsec_val = ClickableLabel(font=mono_font)
+        self._nsec_lbl.setBuddy(self._nsec_val)
+
+        con2_layout.addWidget(self._nsec_lbl, 0, 0, alignment=Qt.AlignTop)
+        con2_layout.addWidget(self._nsec_val, 0, 1, alignment=Qt.AlignTop)
+
+        # nsec/npub entry - shows if enter existing
+        self._nsec_npub_in_lbl = ClickableLabel('nsec/npub', visible=False)
+        self._nsec_npub_val = QLineEdit(font=mono_font, visible=False)
+        self._nsec_npub_in_lbl.setBuddy(self._nsec_npub_val)
+
+        con2_layout.addWidget(self._nsec_npub_in_lbl, 1, 0, alignment=Qt.AlignTop)
+        con2_layout.addWidget(self._nsec_npub_val, 1, 1, alignment=Qt.AlignTop)
+
+        npub_lbl = ClickableLabel('npub')
+        self._npub_val = ClickableLabel('', font=mono_font)
+        npub_lbl.setBuddy(self._npub_val)
+        con2_layout.addWidget(npub_lbl, 2, 0, alignment=Qt.AlignTop)
+        con2_layout.addWidget(self._npub_val, 2, 1, alignment=Qt.AlignTop)
+
+        # add events  as needed to inputs
+        self._name_in.textChanged.connect(self._setView)
+        self._nsec_lbl.clicked.connect(self._regen_key)
+        self._nsec_val.clicked.connect(self._regen_key)
+        npub_lbl.clicked.connect(self._regen_key)
+        self._npub_val.clicked.connect(self._regen_key)
+        self._nsec_npub_val.textChanged.connect(self._key_input_changed)
+
+        self._layout.addWidget(con2)
+
+        # add the option buts
+        self._diag_buts = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self._ok_but = self._diag_buts.button(QDialogButtonBox.Ok)
+        self._diag_buts.accepted.connect(self.accept)
+        self._diag_buts.rejected.connect(self.reject)
+        self._layout.addWidget(self._diag_buts)
+
+    def _have_valid_name(self) -> bool:
+        c_name = self._name_in.text()
+        ret = False
+        if c_name != '':
+            ret = True
+        return ret
+
+    def _have_valid_key(self) -> bool:
+        is_gen = self.OP_GEN_NEW == self._type_drop.currentText()
+        if is_gen:
+            ret = True
+        else:
+            ret = Keys.get_key(self._nsec_npub_val.text()) is not None
+
+        return ret
+
+    def _setView(self):
+        is_gen = self.OP_GEN_NEW == self._type_drop.currentText()
+        self._nsec_lbl.setVisible(is_gen)
+        self._nsec_val.setVisible(is_gen)
+        self._nsec_npub_in_lbl.setVisible(not is_gen)
+        self._nsec_npub_val.setVisible(not is_gen)
+        self._ok_but.setEnabled(self._have_valid_name() and self._have_valid_key())
+
+        self.adjustSize()
+
+    def _regen_key(self):
+        if self.OP_GEN_NEW == self._type_drop.currentText():
+            self._generated_keys = Keys()
+            self._nsec_val.setText(self._generated_keys.private_key_bech32())
+            self._npub_val.setText(self._generated_keys.public_key_bech32())
+
+    def _key_input_changed(self, new_text):
+        npub = Keys.get_key(new_text)
+        if npub is None:
+            self._npub_val.setText('not a valid key')
+        elif npub.private_key_hex() is None:
+            self._npub_val.setText('public key only')
+        else:
+            self._npub_val.setText(npub.public_key_bech32())
+        self._setView()
+
+    async def ashow(self):
+        # self.show()
+        # while self.isVisible():
+        #     await asyncio.sleep(0.1)
+        loop = asyncio.get_event_loop()
+        self.setModal(True)  # Make the dialog modal
+        result = await loop.run_in_executor(None, self.exec_)
+        return result
+
+    def _type_changed(self):
+        if self.OP_EXISTING == self._type_drop.currentText():
+            self._nsec_val.setText('')
+            self._key_input_changed('')
+        else:
+            self._regen_key()
+
+        self._setView()
+
+    @property
+    def account(self) -> NamedKeys:
+        # safe only if user clicked ok to exit dialog
+        if self.OP_EXISTING == self._type_drop.currentText():
+            nk = Keys.get_key(self._nsec_npub_val.text())
+        else:
+            nk = Keys.get_key(self._nsec_val.text())
+        return NamedKeys(name=self._name_in.text(),
+                         priv_k=nk.private_key_hex(),
+                         pub_k=nk.public_key_hex())
+
+    @asyncClose
+    async def closeEvent(self, event):
+        self.finished.emit(0)
+
 
 class ToggleLabel(ClickableLabel):
     def __init__(self,
@@ -225,10 +431,10 @@ class AccountManager(QWidget):
         self._key_store = SQLiteKeyStore(file_name=WORK_DIR+ KEY_STORE_DB_FILE,
                                          encrypter=self._key_enc)
 
-        self.setFixedWidth(540)
+        self.setFixedWidth(600)
         self.setFixedHeight(480)
         self.show()
-        self._password_dialog = PasswordDialog(parent=self)
+        self._new_acc_dialog = NewAccountDialog(parent=self)
 
         # self.btn_fetch = QPushButton("Fetch", self)
         # self.btn_fetch.clicked.connect(self.on_btn_fetch_clicked)
@@ -237,6 +443,7 @@ class AccountManager(QWidget):
         # asyncio.create_task(self.run())
 
     def create_gui(self):
+        mono_font = QFontDatabase.systemFont(QFontDatabase.FixedFont)
         self.setWindowTitle('Account management')
         self._layout = QVBoxLayout()
         self.setLayout(self._layout)
@@ -296,6 +503,7 @@ class AccountManager(QWidget):
         # tab2_main_con_layout.addWidget(QWidget())
 
         self._acc_list = QListWidget()
+        self._acc_list.setFont(mono_font)
         self._acc_list.itemSelectionChanged.connect(self.account_select)
         tab2_main_con_layout.addWidget(self._acc_list)
 
@@ -312,11 +520,17 @@ class AccountManager(QWidget):
         self._layout.addWidget(self._tabs)
 
     def closeEvent(self, event):
-        self._run = False
-        self._password_dialog.close()
+        pass
+        # self._run = False
+        # self._new_acc_dialog.close()
 
-    def new_account(self):
-        print('do what needs to be done for new account!!!')
+    @asyncSlot()
+    async def new_account(self):
+        result = await self._new_acc_dialog.ashow()
+        if result:
+            await self._key_store.add(self._new_acc_dialog.account)
+            # probably we should just push on end of list rather than this ...
+            await self._update_account_list()
 
     def account_select(self):
         selected_items = self._acc_list.selectedItems()
@@ -340,7 +554,7 @@ class AccountManager(QWidget):
                 accounts = await self._key_store.select()
                 c_acc: NamedKeys
                 for c_acc in accounts:
-                    item = QListWidgetItem(util_funcs.str_tails(c_acc.public_key_hex()).ljust(20) + c_acc.name.ljust(44))
+                    item = QListWidgetItem(util_funcs.str_tails(c_acc.public_key_hex()).ljust(12) + c_acc.name)
                     item.setData(Qt.UserRole, c_acc)
                     self._acc_list.addItem(item)
             self._tab2_main_con.setDisabled(False)
