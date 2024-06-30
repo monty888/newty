@@ -33,7 +33,7 @@ from pathlib import Path
 from getpass import getpass
 
 from monstr.client.client import Client
-from monstr.ident.keystore import SQLiteKeyStore, KeyDataEncrypter
+from monstr.ident.keystore import SQLiteKeyStore, NIP49KeyDataEncrypter, NIP44KeyDataEncrypter
 
 # TMP, keystore should be passed in
 WORK_DIR = f'{Path.home()}/.nostrpy/'
@@ -346,15 +346,16 @@ class ToggleLabel(ClickableLabel):
 class AccountViewBasic(QWidget):
 
     def __init__(self,
+                 actions=None,
                  *args, **kargs):
         super(AccountViewBasic, self).__init__(*args, **kargs)
 
         self._account: NamedKeys = None
         # self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         # self.sizePolicy().se
-        self.create_gui()
+        self.create_gui(actions)
 
-    def create_gui(self):
+    def create_gui(self, actions):
         self._layout = QVBoxLayout()
         self.setLayout(self._layout)
         self._layout.setContentsMargins(0,0,0,0)
@@ -382,10 +383,19 @@ class AccountViewBasic(QWidget):
         self._no_profile_pane_layout.addWidget(self._profile_pub_k_lbl)
 
 
-        #
-        #
-        # self._with_profile_pane = QWidget(visible=False)
-        # self.setMaximumSize(self.sizeHint())
+        self._action_pane = None
+        if actions:
+            self._action_pane = QWidget(visible=False)
+            self._action_pane_layout = QHBoxLayout()
+            self._action_pane.setLayout(self._action_pane_layout)
+            self._layout.addWidget(self._action_pane)
+
+            for c_action in actions:
+                n_action_bt = QPushButton(c_action)
+                self._action_pane_layout.addWidget(n_action_bt)
+                # add events
+                n_action_bt.clicked.connect(self._do_delete)
+
 
     def _key_clicked(self):
         self._profile_pub_k_lbl.toggle()
@@ -403,6 +413,9 @@ class AccountViewBasic(QWidget):
         if account is None:
             self._no_selection_pane.setVisible(True)
             self._no_profile_pane.setVisible(False)
+            # hide actions
+            if self._action_pane:
+                self._action_pane.setVisible(False)
         else:
             self._profile_name_lbl.setText(account.name)
             self._profile_pub_k_lbl.setText(account.public_key_hex())
@@ -411,23 +424,29 @@ class AccountViewBasic(QWidget):
             self._no_selection_pane.setVisible(False)
             self._no_profile_pane.setVisible(True)
 
+            # show actions
+            if self._action_pane:
+                self._action_pane.setVisible(True)
+
+    def _do_delete(self):
+        sender: QPushButton = self.sender()
+        print('action pressed' + sender.text())
+
 
 class AccountManager(QWidget):
 
     def __init__(self,
                  *args, **kargs):
-
         super(AccountManager, self).__init__(*args, **kargs)
 
         self.create_gui()
 
         self._key_store = None
-        self._relist_accounts = True
+        self._accounts = None
 
-        async def get_key() -> str:
-            self._relist_accounts = True
+        async def get_password() -> str:
             return self._password_in.text()
-        self._key_enc = KeyDataEncrypter(get_key=get_key)
+        self._key_enc = NIP49KeyDataEncrypter(get_password=get_password)
         self._key_store = SQLiteKeyStore(file_name=WORK_DIR+ KEY_STORE_DB_FILE,
                                          encrypter=self._key_enc)
 
@@ -435,6 +454,8 @@ class AccountManager(QWidget):
         self.setFixedHeight(480)
         self.show()
         self._new_acc_dialog = NewAccountDialog(parent=self)
+
+
 
         # self.btn_fetch = QPushButton("Fetch", self)
         # self.btn_fetch.clicked.connect(self.on_btn_fetch_clicked)
@@ -498,7 +519,8 @@ class AccountManager(QWidget):
         # sel_view_con_layout = QVBoxLayout()
         # sel_view_con.setLayout(sel_view_con_layout)
         # sel_view_con_layout.addWidget(QLabel('about current selection'))
-        self._acc_view_basic = AccountViewBasic()
+        print('my_con')
+        self._acc_view_basic = AccountViewBasic(actions=['delete', 'launch signer'])
         tab2_main_con_layout.addWidget(self._acc_view_basic)
         # tab2_main_con_layout.addWidget(QWidget())
 
@@ -528,9 +550,13 @@ class AccountManager(QWidget):
     async def new_account(self):
         result = await self._new_acc_dialog.ashow()
         if result:
-            await self._key_store.add(self._new_acc_dialog.account)
-            # probably we should just push on end of list rather than this ...
-            await self._update_account_list()
+            new_acc = self._new_acc_dialog.account
+            # add to store
+            await self._key_store.add(new_acc)
+            # add to list display
+            item = QListWidgetItem(util_funcs.str_tails(new_acc.public_key_hex()).ljust(12) + new_acc.name)
+            item.setData(Qt.UserRole, new_acc)
+            self._acc_list.addItem(item)
 
     def account_select(self):
         selected_items = self._acc_list.selectedItems()
@@ -540,7 +566,8 @@ class AccountManager(QWidget):
             self._acc_view_basic.account = None
 
     def _password_changed(self):
-        self._key_enc.clear_key()
+        self._key_enc.clear_password()
+        self._accounts = None
 
     @asyncSlot()
     async def _tabs_changed(self, idx):
@@ -549,44 +576,30 @@ class AccountManager(QWidget):
 
     async def _update_account_list(self):
         try:
-            if self._relist_accounts:
+            if self._accounts is None:
                 self._acc_list.clear()
-                accounts = await self._key_store.select()
+                # with NIP49 decrypting keys is slower, ideally we could get the account names
+                # and then decrypt the keys on demand but at the moment it all takes place in one hit
+                # with a large store this could be some time so put decrypting note up
+                self._acc_list.addItem(QListWidgetItem('decrypting...'))
+                self._accounts = await self._key_store.select()
+                self._acc_list.clear()
+
                 c_acc: NamedKeys
-                for c_acc in accounts:
+                for c_acc in self._accounts:
                     item = QListWidgetItem(util_funcs.str_tails(c_acc.public_key_hex()).ljust(12) + c_acc.name)
                     item.setData(Qt.UserRole, c_acc)
                     self._acc_list.addItem(item)
             self._tab2_main_con.setDisabled(False)
             self._tab2_err_con.setVisible(False)
         except Exception as e:
+            self._acc_list.clear()
             self._tab2_main_con.setDisabled(True)
             self._show_tab2_err('problem decrypting key store, bad password?')
 
     def _show_tab2_err(self, txt: str):
         self._tab2_err_con.setVisible(True)
         self._tab2_err.setText(txt)
-
-    def get_sqlite_key_store(self, db_file: str, password: str = None):
-        # human alias to keys
-        # keystore for user key aliases
-        # TMP - borrowed from terminal - obvs we want to show a dialog
-        async def get_key() -> str:
-            # ret = password
-            # if password is None:
-            #     self.setDisabled(True)
-            #     self._password_dialog.setEnabled(True)
-            #     if await self._password_dialog.ashow():
-            #         ret = self._password_dialog.password
-            #     else:
-            #         ret = ''
-            #     self.setDisabled(False)
-            #     return ret
-            return self._password_in.text()
-
-        key_enc = KeyDataEncrypter(get_key=get_key)
-        return SQLiteKeyStore(file_name=db_file,
-                              encrypter=key_enc)
 
     async def ashow(self):
         try:
