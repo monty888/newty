@@ -22,12 +22,12 @@ from PySide2.QtWidgets import (
     QAbstractItemView,
     QTabWidget,
     QListWidget,
-    QListWidgetItem, QGridLayout, QSizePolicy, QFrame, QTextEdit
+    QListWidgetItem, QGridLayout, QSizePolicy, QFrame, QTextEdit, QTextBrowser
 
 )
 from PySide2.QtGui import Qt
 from PySide2.QtGui import QFont, QFontDatabase, QValidator
-from PySide2.QtCore import Signal, QRegExp
+from PySide2.QtCore import Signal, QRegExp, QThread
 
 from pathlib import Path
 from getpass import getpass
@@ -41,45 +41,6 @@ WORK_DIR = f'{Path.home()}/.nostrpy/'
 KEY_STORE_DB_FILE = 'keystore.db'
 
 
-# class PasswordDialog(QDialog):
-#
-#     def __init__(self,
-#                  *args, **kargs):
-#
-#         super(PasswordDialog, self).__init__(*args, **kargs)
-#         self.create_gui()
-#         self._accepted = False
-#
-#     def create_gui(self):
-#         self.setWindowTitle('Keystore access')
-#         self._layout = QVBoxLayout()
-#         self.setLayout(self._layout)
-#
-#         self._password_txt = QLineEdit(placeholderText='password')
-#         self._layout.addWidget(self._password_txt)
-#
-#         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-#
-#         bb.accepted.connect(self.accept)
-#         bb.rejected.connect(self.reject)
-#         self._layout.addWidget(bb)
-#
-#     async def ashow(self):
-#         # self.show()
-#         # while self.isVisible():
-#         #     await asyncio.sleep(0.1)
-#         loop = asyncio.get_event_loop()
-#         self.setModal(True)  # Make the dialog modal
-#         result = await loop.run_in_executor(None, self.exec_)
-#         return result
-#
-#     @property
-#     def password(self) -> str:
-#         return self._password_txt.text()
-#
-#     @asyncClose
-#     async def closeEvent(self, event):
-#         self.finished.emit(0)
 
 class ClickableLabel(QLabel):
     clicked = Signal()
@@ -92,6 +53,19 @@ class ClickableLabel(QLabel):
         if event.button() == Qt.LeftButton:
             self.clicked.emit()
 
+
+class SimpleTextValidator(QValidator):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.allowed_characters = QRegExp("[a-zA-Z0-9_]+")  # Allow letters, digits, and underscore
+
+    def validate(self, input_str, pos):
+        if self.allowed_characters.exactMatch(input_str):
+            return self.Acceptable, input_str, pos
+        elif input_str == "":
+            return self.Intermediate, input_str, pos
+        else:
+            return self.Invalid, input_str, pos
 
 # class ClickableLineEdit(QLineEdit):
 #     clicked = Signal()
@@ -111,39 +85,73 @@ class ClickableLabel(QLabel):
 #         return super().eventFilter(source, event)
 
 
-class SimpleTextValidator(QValidator):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.allowed_characters = QRegExp("[a-zA-Z0-9_]+")  # Allow letters, digits, and underscore
+class AcceptOrNotDialog(QDialog):
 
-    def validate(self, input_str, pos):
-        if self.allowed_characters.exactMatch(input_str):
-            return self.Acceptable, input_str, pos
-        elif input_str == "":
-            return self.Intermediate, input_str, pos
-        else:
-            return self.Invalid, input_str, pos
+    def __init__(self,
+                 *args, **kargs):
+
+        super(AcceptOrNotDialog, self).__init__(*args, **kargs)
+        self.setMinimumWidth(610)
+        self.create_gui()
+
+    def create_gui(self):
+        self.setWindowTitle('ask about some action')
+        self._layout = QVBoxLayout()
+        self.setLayout(self._layout)
+
+        # question text area
+        con1 = QWidget()
+        con1_layout = QVBoxLayout()
+        con1.setLayout(con1_layout)
+        # self._question = QLabel()
+
+        self._question = QTextBrowser()
+        self._question.setReadOnly(True)
+        self._question.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._question.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._question.setStyleSheet("border: none;background-color: #f0f0f0")
+
+        con1_layout.addWidget(self._question)
+        self._layout.addWidget(con1)
+
+        # add the option buts
+        self._diag_buts = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self._ok_but = self._diag_buts.button(QDialogButtonBox.Ok)
+        self._diag_buts.accepted.connect(self.accept)
+        self._diag_buts.rejected.connect(self.reject)
+        self._layout.addWidget(self._diag_buts)
 
 
-# class KeyTextValidator(QValidator):
-#     def __init__(self, parent=None):
-#         super().__init__(parent)
-#
-#         self.allowed_prefix = QRegExp("[npuscNPUSC0-9A-Fa-f]+")
-#         self.allowed_key = QRegExp("[0-9A-Fa-f]+")
-#
-#     def validate(self, input_str, pos):
-#         prefix = input_str[:4]
-#         the_rest = input_str[4:]
-#         print('a',self.allowed_prefix.exactMatch(prefix), prefix)
-#         print('b',self.allowed_key.exactMatch(the_rest), the_rest)
-#
-#         if self.allowed_prefix.exactMatch(prefix) and (the_rest=='' or self.allowed_key.exactMatch(the_rest)):
-#             return self.Acceptable, input_str, pos
-#         elif input_str == "":
-#             return self.Intermediate, input_str, pos
-#         else:
-#             return self.Invalid, input_str, pos
+    @property
+    def question(self):
+        return self._question.document().toHtml()
+
+    @question.setter
+    def question(self, q: str):
+        self._question.setHtml(q)
+
+    def _size_q(self):
+        preferred_size = self._question.document().size().toSize()
+        self._question.setMaximumSize(preferred_size)
+        self.adjustSize()
+
+    async def ashow(self):
+        # default to cancle action
+        self._diag_buts.button(QDialogButtonBox.Cancel).setDefault(True)
+
+        # loop = asyncio.get_event_loop()
+        self.setModal(True)  # Make the dialog modal
+        # result = await loop.run_in_executor(None, self.exec_)
+        self.show()
+        self._size_q()
+        while self.isVisible():
+            await asyncio.sleep(0.1)
+
+        return self.result()
+
+    @asyncClose
+    async def closeEvent(self, event):
+        self.finished.emit(0)
 
 
 class NewAccountDialog(QDialog):
@@ -288,10 +296,14 @@ class NewAccountDialog(QDialog):
         # self.show()
         # while self.isVisible():
         #     await asyncio.sleep(0.1)
-        loop = asyncio.get_event_loop()
+
         self.setModal(True)  # Make the dialog modal
-        result = await loop.run_in_executor(None, self.exec_)
-        return result
+
+        self.show()
+        while self.isVisible():
+            await asyncio.sleep(0.1)
+
+        return self.result()
 
     def _type_changed(self):
         if self.OP_EXISTING == self._type_drop.currentText():
@@ -344,6 +356,8 @@ class ToggleLabel(ClickableLabel):
 
 
 class AccountViewBasic(QWidget):
+
+    action = Signal(dict)
 
     def __init__(self,
                  actions=None,
@@ -405,7 +419,7 @@ class AccountViewBasic(QWidget):
 
     @property
     def account(self) -> NamedKeys:
-        return self._pub_k
+        return self._account
 
     @account.setter
     def account(self, account: NamedKeys):
@@ -429,8 +443,10 @@ class AccountViewBasic(QWidget):
                 self._action_pane.setVisible(True)
 
     def _do_delete(self):
-        sender: QPushButton = self.sender()
-        print('action pressed' + sender.text())
+        # sender: QPushButton = self.sender()
+        self.action.emit({
+            'action': 'delete'
+        })
 
 
 class AccountManager(QWidget):
@@ -450,18 +466,16 @@ class AccountManager(QWidget):
         self._key_store = SQLiteKeyStore(file_name=WORK_DIR+ KEY_STORE_DB_FILE,
                                          encrypter=self._key_enc)
 
-        self.setFixedWidth(600)
-        self.setFixedHeight(480)
-        self.show()
+        # dialog to show when adding new account
         self._new_acc_dialog = NewAccountDialog(parent=self)
 
+        # dialog for user confirm of actions
+        self._accept_dialog = AcceptOrNotDialog(parent=self)
 
-
-        # self.btn_fetch = QPushButton("Fetch", self)
-        # self.btn_fetch.clicked.connect(self.on_btn_fetch_clicked)
-        # self.layout().addWidget(self.btn_fetch)
-
-        # asyncio.create_task(self.run())
+        # size and show
+        self.setFixedWidth(600)
+        self.setFixedHeight(480)
+        # self.show()
 
     def create_gui(self):
         mono_font = QFontDatabase.systemFont(QFontDatabase.FixedFont)
@@ -515,12 +529,10 @@ class AccountManager(QWidget):
         self._tab2_err_con.setLayout(tab2_err_con_layout)
         tab2_layout.addWidget(self._tab2_err_con)
 
-        # sel_view_con = QWidget()
-        # sel_view_con_layout = QVBoxLayout()
-        # sel_view_con.setLayout(sel_view_con_layout)
-        # sel_view_con_layout.addWidget(QLabel('about current selection'))
-        print('my_con')
+        # top area that shows info based on selected account
         self._acc_view_basic = AccountViewBasic(actions=['delete', 'launch signer'])
+        self._acc_view_basic.action.connect(self._do_account_action)
+
         tab2_main_con_layout.addWidget(self._acc_view_basic)
         # tab2_main_con_layout.addWidget(QWidget())
 
@@ -540,6 +552,25 @@ class AccountManager(QWidget):
         self._tabs.addTab(self._tab2, 'accounts')
         # self._url_text = QLineEdit(placeholderText='something')
         self._layout.addWidget(self._tabs)
+
+    @asyncSlot()
+    async def _do_account_action(self, args: dict):
+        action = args['action']
+        if action == 'delete':
+            # sec acc and idx shouldn't be able to get out of sync i think...
+            sel_acc = self._acc_view_basic.account
+            sel_idx = self._acc_list.selectedIndexes()[0].row()
+            self._accept_dialog.setWindowTitle('Delete account')
+            self._accept_dialog.question = f'remove account <b>{sel_acc.name}</b> from keystore, are you sure?'
+            take_action = await self._accept_dialog.ashow()
+            print('take action!!!!')
+            if take_action:
+                # remove from display and key_store
+                self._acc_list.takeItem(sel_idx)
+                await self._key_store.delete(sel_acc.name)
+
+        else:
+            print(f'unknown action {action}')
 
     def closeEvent(self, event):
         pass
@@ -576,13 +607,20 @@ class AccountManager(QWidget):
 
     async def _update_account_list(self):
         try:
+            # lear any error text
+            self._show_tab2_err('')
+
             if self._accounts is None:
                 self._acc_list.clear()
                 # with NIP49 decrypting keys is slower, ideally we could get the account names
                 # and then decrypt the keys on demand but at the moment it all takes place in one hit
                 # with a large store this could be some time so put decrypting note up
                 self._acc_list.addItem(QListWidgetItem('decrypting...'))
+
+                # load accs as this can take some time do it in another thread
                 self._accounts = await self._key_store.select()
+
+
                 self._acc_list.clear()
 
                 c_acc: NamedKeys
@@ -593,6 +631,7 @@ class AccountManager(QWidget):
             self._tab2_main_con.setDisabled(False)
             self._tab2_err_con.setVisible(False)
         except Exception as e:
+            print(e)
             self._acc_list.clear()
             self._tab2_main_con.setDisabled(True)
             self._show_tab2_err('problem decrypting key store, bad password?')
@@ -603,12 +642,12 @@ class AccountManager(QWidget):
 
     async def ashow(self):
         try:
-
-
+            self.show()
+            i = 1
             while self.isVisible():
-                # print('runnming')
+                # print('runnming', i)
+                # i+=1
                 await asyncio.sleep(0.1)
-            print('we closed!!')
 
         except Exception as e:
             print(e)
