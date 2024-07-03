@@ -10,6 +10,14 @@ source venv/bin/activate
 pip install .
 ```
 
+# account
+Make basic query request to nostr relays.  
+
+![nostr basic query tool](account.png) 
+```shell
+TODO...
+```
+
 # basic query
 Make basic query request to nostr relays.  
 
@@ -17,3 +25,4 @@ Make basic query request to nostr relays.
 ```shell
 python basic_query.py
 ```
+
