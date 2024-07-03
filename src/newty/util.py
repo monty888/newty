@@ -1,82 +1,96 @@
-import asyncio
-import aiohttp
 import logging
-from cachetools import TTLCache, LRUCache
+import toml
+import sys
+from pathlib import Path
+from toml import TomlDecodeError
+import os
+from monstr.ident.keystore import SQLiteKeyStore, NIP49KeyDataEncrypter, KeystoreInterface
+from monstr.signing.signing import SignerInterface, BasicKeySigner
+from monstr.signing.nip46 import NIP46Signer
+from monstr.util import ConfigError
+from monstr.encrypt import Keys
+import getpass
 
 
-class ResourceFetcher:
-    """
-        very basic http resource fetcher, with a LRU cache
-    """
-    def __init__(self):
-        self._cache = LRUCache(10000)
+def load_toml(filename, dir, current_args):
+    if os.path.sep not in filename:
+        filename = dir+os.path.sep+filename
 
-        self._in_progress = {}
+    f = Path(filename)
+    if f.is_file():
+        try:
+            toml_dict = toml.load(filename)
 
-    async def get(self, url):
-        if url in self._cache:
-            ret = self._cache[url]
-        else:
-            if url not in self._in_progress:
-                self._in_progress[url] = True
-                self._cache[url] = ret = await self._do_fetch(url)
+            for n, v in toml_dict.items():
+                n = n.replace('-','_')
+                if n in current_args:
+                    c_v = current_args[n]
+                    if isinstance(c_v, dict):
+                        for k, v in v.items():
+                            c_v[k] = v
+                    else:
+                        current_args[n] = v
 
-            else:
+                else:
+                    current_args[n] = v
 
-                timeout = 10.0
-                wait_time = 0
-                while url not in self._cache:
-                    if wait_time >= timeout:
-                        raise Exception(f'timeout loading resource {url}')
-                    await asyncio.sleep(0.1)
-                    wait_time += 0.1
+        except TomlDecodeError as te:
+            print(f'Error in config file {filename} -{te}')
+            sys.exit(2)
 
-                # if we didn't throw it should exist by now
-                ret = self._cache[url]
+    else:
+        logging.debug(f'load_toml:: no config file {filename}')
 
 
+def get_sqlite_key_store(db_file, password: str = None):
+    # human alias to keys
+    # keystore for user key aliases
+    async def get_password() -> str:
+        ret = password
+        if password is None:
+            ret = getpass('keystore key: ')
         return ret
 
-    async def _do_fetch(self, url):
-        ret = None
-        async with aiohttp.ClientSession(headers={
-            'Accept': 'image/*'
-        }) as session:
+    key_enc = NIP49KeyDataEncrypter(get_password=get_password)
+    return SQLiteKeyStore(file_name=db_file,
+                          encrypter=key_enc)
 
-            retry_count = 5
-            attempt = 1
-            wait_time = 1
+async def get_key_from_str(key: str,
+                           private_only=False,
+                           key_store: KeystoreInterface = None) -> Keys:
+    """
+    given key str try to make a Key obj
+    :param key:            , seperated nsec/npub
+    :param private_only:    only accept keys that we can sign with
+    :param key_store:
+    :return: Key
+    """
 
-            while ret is None and attempt <= retry_count:
-                try:
-                    async with session.get(url) as response:
-                        if response.status == 200:
-                            ret = await response.read()
-                            self._cache[url] = ret
+    # if it's a bech32 str then convert to key obj
+    if Keys.is_bech32_key(key):
+        ret = Keys.get_key(key)
+    # else we'll have a look in the key_store if one was given
+    elif key_store:
+        ret = await key_store.get(key)
+        if ret is None:
+            raise ConfigError(f'{key} doesn\'t look like a nsec/npub nostr key or alias not found')
+    else:
+        raise ConfigError(f'{key} doesn\'t look like a nsec/npub nostr key')
 
-                except Exception as e:
-                    # note we just continue without relay specific info... maybe do some better fullback
-                    logging.debug(f'ResourceFetcher::get failed: {e} for {url}')
-                    retry_count += 1
-                    await asyncio.sleep(wait_time)
-                    wait_time *= 2
+    if private_only and ret.private_key_hex() is None:
+        raise ConfigError(f'{key} is not a private key')
 
-            self._in_progress[url] = False
-
-        return ret
-
-    def __contains__(self, url):
-        return url in self._cache
-
-    def __getitem__(self, url):
-        return self._cache[url]
+    return ret
 
 
-async def test_resource_fetch():
-    my_resources = ResourceFetcher()
-    print(await my_resources.get('https://oxtr.dev/assets/profilepic-animated-small.gif'))
+async def get_signer_from_str(key: str,
+                              key_store: KeystoreInterface = None) -> SignerInterface:
 
+    if key.lower().startswith('bunker://'):
+        ret = NIP46Signer(key, auto_start=True)
+    else:
+        ret = BasicKeySigner(await get_key_from_str(key=key,
+                                                    key_store=key_store,
+                                                    private_only=True))
 
-if __name__ == '__main__':
-    logging.getLogger().setLevel(logging.DEBUG)
-    asyncio.run(test_resource_fetch())
+    return ret

@@ -10,7 +10,7 @@ from monstr.event.event_handlers import EventHandler
 from monstr.ident.event_handlers import NetworkedProfileEventHandler
 import qasync
 from qasync import asyncSlot, asyncClose, QApplication
-from newty.util import ResourceFetcher
+from newty.network.media import ResourceFetcher
 from newty.gui.nostr import AddressBarPane, Location, LocationSource
 from newty.gui.panes.panes import ViewPane
 from newty.gui.panes.event import EventViewPane

@@ -25,7 +25,7 @@ from monstr.encrypt import Keys
 from monstr.signing.signing import SignerInterface, BasicKeySigner
 from monstr.ident.event_handlers import NetworkedProfileEventHandler, ProfileEventHandlerInterface
 from monstr.util import util_funcs
-from newty.util import ResourceFetcher
+from newty.network.media import ResourceFetcher
 from newty.gui.layout import FlowLayout
 from newty.gui.nostr import VerticalScrollArea, LabelWithRemoteImage
 from newty.gui.panes.panes import ViewPane

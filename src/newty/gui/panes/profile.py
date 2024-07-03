@@ -16,7 +16,7 @@ from PySide2.QtGui import (
 
 from newty.gui.panes.panes import ViewPane
 from newty.gui.nostr import Location
-from newty.util import ResourceFetcher
+from newty.network.media import ResourceFetcher
 from newty.gui.nostr import VerticalScrollArea
 from monstr.ident.profile import Profile
 from monstr.encrypt import Keys

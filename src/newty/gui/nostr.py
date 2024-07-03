@@ -17,7 +17,7 @@ from PySide2.QtGui import (
 
 from monstr.ident.event_handlers import NetworkedProfileEventHandler
 from monstr.encrypt import Keys
-from newty.util import ResourceFetcher
+from newty.network.media import ResourceFetcher
 from newty.gui.util import mask_image
 
 

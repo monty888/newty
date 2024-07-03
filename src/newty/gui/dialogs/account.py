@@ -408,7 +408,7 @@ class AccountViewBasic(QWidget):
                 n_action_bt = QPushButton(c_action)
                 self._action_pane_layout.addWidget(n_action_bt)
                 # add events
-                n_action_bt.clicked.connect(self._do_delete)
+                n_action_bt.clicked.connect(self._do_action)
 
 
     def _key_clicked(self):
@@ -442,10 +442,10 @@ class AccountViewBasic(QWidget):
             if self._action_pane:
                 self._action_pane.setVisible(True)
 
-    def _do_delete(self):
-        # sender: QPushButton = self.sender()
+    def _do_action(self):
+        action: QPushButton = self.sender()
         self.action.emit({
-            'action': 'delete'
+            'action': action.text()
         })
 
 
@@ -563,11 +563,21 @@ class AccountManager(QWidget):
             self._accept_dialog.setWindowTitle('Delete account')
             self._accept_dialog.question = f'remove account <b>{sel_acc.name}</b> from keystore, are you sure?'
             take_action = await self._accept_dialog.ashow()
-            print('take action!!!!')
             if take_action:
                 # remove from display and key_store
                 self._acc_list.takeItem(sel_idx)
                 await self._key_store.delete(sel_acc.name)
+
+        elif action == 'launch signer':
+            import subprocess
+            sel_acc = self._acc_view_basic.account
+            # subprocess.Popen(f'/home/monty/scripts/signer.sh {sel_acc.name}',
+            #                  shell=True,
+            #                  executable="/bin/bash")
+
+            subprocess.Popen(f'python -m newty.signer_app {sel_acc.name}',
+                         shell=True,
+                         executable="/bin/bash")
 
         else:
             print(f'unknown action {action}')
