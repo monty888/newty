@@ -11,7 +11,7 @@ pip install .
 ```
 
 # account
-Make basic query request to nostr relays.  
+Keystore for nostr accounts.
 
 ![nostr basic query tool](account.png) 
 ```shell
