@@ -154,6 +154,47 @@ class AcceptOrNotDialog(QDialog):
         self.finished.emit(0)
 
 
+class PasswordDialog(QDialog):
+
+    def __init__(self,
+                 *args, **kargs):
+
+        super(PasswordDialog, self).__init__(*args, **kargs)
+        self.create_gui()
+        self._accepted = False
+
+    def create_gui(self):
+        self.setWindowTitle('Keystore access')
+        self._layout = QVBoxLayout()
+        self.setLayout(self._layout)
+
+        self._password_txt = QLineEdit(placeholderText='password')
+        self._layout.addWidget(self._password_txt)
+
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        self._layout.addWidget(bb)
+
+    async def ashow(self):
+        # self.show()
+        # while self.isVisible():
+        #     await asyncio.sleep(0.1)
+        loop = asyncio.get_event_loop()
+        self.setModal(True)  # Make the dialog modal
+        result = await loop.run_in_executor(None, self.exec_)
+        return result
+
+    @property
+    def password(self) -> str:
+        return self._password_txt.text()
+
+    @asyncClose
+    async def closeEvent(self, event):
+        self.finished.emit(0)
+
+
 class NewAccountDialog(QDialog):
 
     OP_GEN_NEW = 'generate new'
@@ -463,7 +504,7 @@ class AccountManager(QWidget):
         async def get_password() -> str:
             return self._password_in.text()
         self._key_enc = NIP49KeyDataEncrypter(get_password=get_password)
-        self._key_store = SQLiteKeyStore(file_name=WORK_DIR+ KEY_STORE_DB_FILE,
+        self._key_store = SQLiteKeyStore(file_name=WORK_DIR+KEY_STORE_DB_FILE,
                                          encrypter=self._key_enc)
 
         # dialog to show when adding new account

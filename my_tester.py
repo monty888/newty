@@ -725,6 +725,7 @@ async def main():
 
     app = QApplication.instance()
 
+
     # from PySide2.QtCore import QUrl
     # view = QWebEngineView()
     # view.load(QUrl("https://qt-project.org/"))

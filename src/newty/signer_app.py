@@ -1,14 +1,23 @@
 import datetime
 import logging
 import asyncio
+import qasync
+import sys
 import aioconsole
 import argparse
+import signal
 from pathlib import Path
+from functools import partial
+from qasync import asyncSlot, asyncClose, QApplication
+from PySide2.QtWidgets import (
+    QWidget
+)
+from PySide2.QtCore import QTimer, QCoreApplication
 from monstr.encrypt import DecryptionException
 from monstr.util import ConfigError
 from monstr.signing.nip46 import NIP46ServerConnection, NIP46AuthoriseInterface
 from newty.util import load_toml, get_sqlite_key_store, get_signer_from_str
-
+from newty.gui.signer.signer import SignerGUI
 """
     modified signer app from monstr_terminal with a QT front end
 """
@@ -186,13 +195,34 @@ async def main(args):
             test with other implementations as find them
     """
     try:
+        # set up QT env
+        def close_future(future, loop):
+            loop.call_later(10, future.cancel)
+            future.cancel()
+        loop = asyncio.get_event_loop()
+        future = asyncio.Future()
+
+        app = QApplication.instance()
+        if hasattr(app, "aboutToQuit"):
+            getattr(app, "aboutToQuit").connect(
+                partial(close_future, future, loop)
+            )
+        print('created app',app)
+
+        # hack widget to stop qt closing if we present then close password dialog
+        keep_alive = QWidget(visible=True)
+        keep_alive.setGeometry(-100, -100, 1, 1)
+
+
         # store of aliases to keys
         key_store = get_sqlite_key_store(db_file=args['keystore']['filename'],
-                                         password=args['keystore']['password'])
+                                         password=None)
 
-        # user we're signing for
-        user_sign = await get_signer_from_str(key=args['user'],
-                                              key_store=key_store)
+
+        # get key we'll sign as, only from store but could be adhoc in future
+        user_k = await key_store.get(args['user'])
+        if user_k is None:
+            raise ConfigError(f'user not found in store {args["user"]}')
 
         # relays to attach to
         relays = args['relay'].split(',')
@@ -204,23 +234,38 @@ async def main(args):
         auth_type = args['auth']
 
         if auth_type == 'ask':
-            print('all operations will require manual authorisation')
+            # print('all operations will require manual authorisation')
             my_auth = BooleanAuthorise()
         elif isinstance(auth_type, int):
             my_auth = TimedAuthorise(auth_mins=auth_type, verbose=verbose)
-            print(f'operations will require manual authorisation every {auth_type} minutes')
+            # print(f'operations will require manual authorisation every {auth_type} minutes')
         else:
             my_auth = AuthoriseAll(verbose=verbose)
-            print(f'operations will always be authorised')
-
-        my_sign_con = NIP46ServerConnection(signer=user_sign,
-                                            relay=relays,
-                                            authoriser=my_auth)
+            # print(f'operations will always be authorised')
 
 
-        print(await my_sign_con.bunker_url)
-        await my_sign_con.run()
-        print('done')
+
+        # start Signer gui
+        signer = SignerGUI(signer_args={
+            'user': user_k,
+            'key_store': key_store
+        })
+        signer.show()
+        # we can now kill this hack
+        keep_alive.hide()
+
+        # and wait
+        await future
+
+
+        # my_sign_con = NIP46ServerConnection(signer=user_sign,
+        #                                     relay=relays,
+        #                                     authoriser=my_auth)
+        #
+        #
+        # print(await my_sign_con.bunker_url)
+        # await my_sign_con.run()
+        # print('done')
 
 
     except ConfigError as ce:
@@ -231,11 +276,11 @@ async def main(args):
         print(e)
 
 if __name__ == "__main__":
-    logging.getLogger().setLevel(logging.ERROR)
+    logging.getLogger().setLevel(logging.DEBUG)
     try:
-        asyncio.run(main(get_args()))
-    except ConfigError as ce:
-        print(ce)
+        qasync.run(main(get_args()))
+    except asyncio.exceptions.CancelledError:
+        sys.exit(0)
 
 
 

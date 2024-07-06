@@ -9,7 +9,7 @@ from monstr.signing.signing import SignerInterface, BasicKeySigner
 from monstr.signing.nip46 import NIP46Signer
 from monstr.util import ConfigError
 from monstr.encrypt import Keys
-import getpass
+from newty.gui.dialogs.account import PasswordDialog
 
 
 def load_toml(filename, dir, current_args):
@@ -43,12 +43,12 @@ def load_toml(filename, dir, current_args):
 
 
 def get_sqlite_key_store(db_file, password: str = None):
-    # human alias to keys
-    # keystore for user key aliases
+    my_diag = PasswordDialog()
     async def get_password() -> str:
         ret = password
         if password is None:
-            ret = getpass('keystore key: ')
+            await my_diag.ashow()
+            ret = my_diag.password
         return ret
 
     key_enc = NIP49KeyDataEncrypter(get_password=get_password)
