@@ -46,46 +46,46 @@ def print_auth_info(method:str, params:dict):
     print('params', params)
 
 
-class AuthoriseAll(NIP46AuthoriseInterface):
-
-    def __init__(self, verbose: bool = False):
-        self._verbose = verbose
-
-    async def authorise(self, method: str, id: str, params: [str]) -> bool:
-        if self._verbose:
-            print_auth_info(method, params)
-        return True
-
-
-class BooleanAuthorise(NIP46AuthoriseInterface):
-
-    async def authorise(self, method: str, id: str, params: [str]) -> bool:
-        # always verbose
-        print_auth_info(method, params)
-        accept = await aioconsole.ainput('authorise y/n? ')
-        return accept.lower() == 'y'
-
-
-class TimedAuthorise(BooleanAuthorise):
-
-    def __init__(self, auth_mins = 10, verbose: bool = False):
-        self._last_auth_at = None
-        self._auth_delta = datetime.timedelta(minutes=auth_mins)
-        self._verbose = verbose
-
-    async def authorise(self, method: str, id: str, params: [str]) -> bool:
-        if self._verbose:
-            print_auth_info(method, params)
-        now = datetime.datetime.now()
-        ret = True
-
-        # maybe we need to reauth?
-        if self._last_auth_at is None or (now - self._last_auth_at) > self._auth_delta:
-            ret = await super().authorise(method, id, params)
-            if ret:
-                self._last_auth_at = now
-
-        return ret
+# class AuthoriseAll(NIP46AuthoriseInterface):
+#
+#     def __init__(self, verbose: bool = False):
+#         self._verbose = verbose
+#
+#     async def authorise(self, method: str, id: str, params: [str]) -> bool:
+#         if self._verbose:
+#             print_auth_info(method, params)
+#         return True
+#
+#
+# class BooleanAuthorise(NIP46AuthoriseInterface):
+#
+#     async def authorise(self, method: str, id: str, params: [str]) -> bool:
+#         # always verbose
+#         print_auth_info(method, params)
+#         accept = await aioconsole.ainput('authorise y/n? ')
+#         return accept.lower() == 'y'
+#
+#
+# class TimedAuthorise(BooleanAuthorise):
+#
+#     def __init__(self, auth_mins = 10, verbose: bool = False):
+#         self._last_auth_at = None
+#         self._auth_delta = datetime.timedelta(minutes=auth_mins)
+#         self._verbose = verbose
+#
+#     async def authorise(self, method: str, id: str, params: [str]) -> bool:
+#         if self._verbose:
+#             print_auth_info(method, params)
+#         now = datetime.datetime.now()
+#         ret = True
+#
+#         # maybe we need to reauth?
+#         if self._last_auth_at is None or (now - self._last_auth_at) > self._auth_delta:
+#             ret = await super().authorise(method, id, params)
+#             if ret:
+#                 self._last_auth_at = now
+#
+#         return ret
 
 
 def get_cmdline_args(args) -> dict:
@@ -231,17 +231,17 @@ async def main(args):
         verbose = args['verbose']
 
         # create the authoriser if any, this decide how we ask user to proceed on requests for sign ops
-        auth_type = args['auth']
-
-        if auth_type == 'ask':
-            # print('all operations will require manual authorisation')
-            my_auth = BooleanAuthorise()
-        elif isinstance(auth_type, int):
-            my_auth = TimedAuthorise(auth_mins=auth_type, verbose=verbose)
-            # print(f'operations will require manual authorisation every {auth_type} minutes')
-        else:
-            my_auth = AuthoriseAll(verbose=verbose)
-            # print(f'operations will always be authorised')
+        # auth_type = args['auth']
+        #
+        # if auth_type == 'ask':
+        #     # print('all operations will require manual authorisation')
+        #     my_auth = BooleanAuthorise()
+        # elif isinstance(auth_type, int):
+        #     my_auth = TimedAuthorise(auth_mins=auth_type, verbose=verbose)
+        #     # print(f'operations will require manual authorisation every {auth_type} minutes')
+        # else:
+        #     my_auth = AuthoriseAll(verbose=verbose)
+        #     # print(f'operations will always be authorised')
 
 
 

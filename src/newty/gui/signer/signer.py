@@ -25,19 +25,22 @@ from PySide2.QtWidgets import (
     QListWidgetItem, QGridLayout, QSizePolicy, QFrame, QTextEdit, QTextBrowser
 
 )
-from PySide2.QtGui import Qt
+from PySide2.QtGui import Qt, QClipboard
 from PySide2.QtGui import QFont, QFontDatabase, QValidator
 from PySide2.QtCore import Signal, QRegExp, QThread, Slot, QRunnable, QObject, QThreadPool, QEventLoop
 
 from pathlib import Path
 from getpass import getpass
 
-from monstr.client.client import Client
+from monstr.client.client import Client, ClientPool
 from monstr.ident.keystore import SQLiteKeyStore, NIP49KeyDataEncrypter, NIP44KeyDataEncrypter, KeystoreInterface
+from monstr.signing.signing import BasicKeySigner
+from monstr.signing.nip46 import NIP46ServerConnection
 
 
 class WorkerSignals(QObject):
     finished = Signal(str)
+
 
 class Worker(QObject):
     def __init__(self, func: callable):
@@ -49,15 +52,17 @@ class Worker(QObject):
     def start_task(self):
         asyncio.ensure_future(self._func())
 
+
 class EditableDropdownWidget(QWidget):
 
     def __init__(self,
+                 value: str = '',
                  editable: bool = False,
                  *args, **kargs):
         super(EditableDropdownWidget, self).__init__(*args, **kargs)
 
+        self._value = value
         self._editable = editable
-
         self._create_gui()
 
     def _create_gui(self):
@@ -72,16 +77,38 @@ class EditableDropdownWidget(QWidget):
         self._sel_in = QComboBox()
         # self._sel_in.setContentsMargins(0,0,0,0)
         self._sel_in.setEditable(self._editable)
-        self._sel_in.addItems(["Option 1", "Option 2", "Option 3"])
         name_lbl.setBuddy(self._sel_in)
+
+        # set the selection if any, if we don't have any items - which at the moment as we don't support items
+        # (easy add though) on creation we won't then we'll add just the single item so it can be selected and expect
+        # that if there are to be other items they'll be added in time via set_items
+        if self._value:
+            self._sel_in.addItems([self._value])
+            self._sel_in.setCurrentText(self._value)
+
 
         # add widgets to layout
         self._layout.addWidget(name_lbl, 0, 0, alignment=Qt.AlignTop)
         self._layout.addWidget(self._sel_in, 0, 1, alignment=Qt.AlignTop)
-        print('drop was created')
 
     def set_min_label_width(self, width: int ):
         self._layout.setColumnMinimumWidth(0, width)
+
+    def set_enable(self, enabled:bool):
+        self._sel_in.setEnabled(enabled)
+
+    def set_items(self, items: [str]):
+        sel_text = self._sel_in.currentText()
+        self._sel_in.clear()
+        self._sel_in.addItems(items)
+
+        # keep same selected text
+        if sel_text:
+            self._sel_in.setCurrentText(sel_text)
+
+    def selected_text(self):
+        return self._sel_in.currentText()
+
 
 
 class SignerGUI(QWidget):
@@ -93,6 +120,8 @@ class SignerGUI(QWidget):
 
         self._user: NamedKeys = None
         self._key_store: KeystoreInterface = None
+
+        self._signer: NIP46ServerConnection = None
 
         # some args were handed in, if not user will have to set everything manually
         if signer_args:
@@ -120,18 +149,51 @@ class SignerGUI(QWidget):
         con1.setLayout(con1_layout)
 
         s_relay_lbl = QLabel('signing relay(s)')
-        self._relay_in = QLineEdit()
+        # TODO: simple relay add/rem widget
+        self._relay_in = QLineEdit(text='ws://localhost:8081')
         s_relay_lbl.setBuddy(self._relay_in)
 
         con1_layout.addWidget(s_relay_lbl, 1, 0, alignment=Qt.AlignTop)
         con1_layout.addWidget(self._relay_in, 1, 1, alignment=Qt.AlignTop)
 
-        my_drop = EditableDropdownWidget()
-        my_drop.set_min_label_width(min_lbl_width)
+        sel_name = None
+        if self._user:
+            sel_name = self._user.name
+        self._acc_sel = EditableDropdownWidget(value=sel_name)
+        self._acc_sel.set_min_label_width(min_lbl_width)
 
-        self._layout.addWidget(my_drop)
+        self._layout.addWidget(self._acc_sel)
         self._layout.addWidget(con1)
         self._layout.addStretch()
+
+        self._run_button = QPushButton('start')
+        self._run_button.clicked.connect(self._run_clicked)
+
+        self._connect_lbl = QLabel(visible=False)
+        self._connect_lbl.setCursor(Qt.PointingHandCursor)
+        self._connect_lbl.mousePressEvent = self._connect_str_to_clipboard
+
+        self._layout.addWidget(self._connect_lbl)
+
+        self._layout.addWidget(self._run_button)
+
+        # Add a status bar at the bottom
+        status_layout = QHBoxLayout()
+        self._layout.addLayout(status_layout)
+
+        self._status_label = QLabel("not running")
+
+
+        # Style the status label to look like a status bar
+        self._status_label.setStyleSheet("""
+            QLabel {
+                background-color: #f0f0f0; /* Light grey background */
+                border: 1px solid #dcdcdc; /* Light grey border */
+                padding: 2px; /* Padding to make it look like a status bar */
+            }
+        """)
+        status_layout.addWidget(self._status_label)
+
         self._update_user()
         self._load_accounts()
 
@@ -139,11 +201,63 @@ class SignerGUI(QWidget):
         loop = asyncio.get_event_loop()
         asyncio.ensure_future(self._aload_accounts(), loop=loop)
 
+    def _run_clicked(self):
+        run_text = self._run_button.text()
+        # start or stop toggle
+        if run_text == 'start':
+            self._run_button.setText('stop')
+            self._set_enable(False)
+            self._status_label.setText('starting')
+
+            def my_status(status):
+                if status['connected'] == True:
+                    self._status_label.setText('connected')
+                else:
+                    # give more info here
+                    self._status_label.setText('connection problem')
+
+            # self._client = ClientPool(self._relay_in.text().split(','),
+            #                           on_status=my_status)
+            # asyncio.create_task(self._client.run())
+
+            async def start_signer():
+                sel_user = await self._key_store.get(self._acc_sel.selected_text())
+
+
+                self._signer = NIP46ServerConnection(signer=BasicKeySigner(sel_user),
+                                                     relay=self._relay_in.text())
+                asyncio.create_task(self._signer.run(on_status=my_status))
+                self._connect_lbl.setVisible(True)
+                self._connect_lbl.setText(await self._signer.bunker_url)
+            asyncio.create_task(start_signer())
+
+
+        else:
+            self._run_button.setText('start')
+            self._connect_lbl.setVisible(False)
+            self._set_enable(True)
+            self._signer.client.set_on_status(None)
+            self._signer.end()
+            self._status_label.setText('not running')
+            self.adjustSize()
+            # self._client.end()
+
+
+    def _connect_str_to_clipboard(self, evt):
+        clipboard = QApplication.clipboard()
+        clipboard.setText(self._connect_lbl.text())
+
+    def _set_enable(self, enable:bool):
+        self._acc_sel.set_enable(enable)
+        self._relay_in.setEnabled(enable)
+
     @asyncSlot()
     async def _aload_accounts(self):
         if self._key_store:
             accounts = await self._key_store.select()
-            print('LOADED ACCOUNTS!!!!!!', len(accounts))
+            items = [c_acc.name for c_acc in accounts]
+            items.sort()
+            self._acc_sel.set_items(items)
 
     def _update_user(self):
         user_display = 'no user'

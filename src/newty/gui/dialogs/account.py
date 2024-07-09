@@ -170,12 +170,15 @@ class PasswordDialog(QDialog):
 
         self._password_txt = QLineEdit(placeholderText='password')
         self._layout.addWidget(self._password_txt)
+        # self._layout.addStretch()
 
         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
 
         bb.accepted.connect(self.accept)
         bb.rejected.connect(self.reject)
         self._layout.addWidget(bb)
+        self.adjustSize()
+        self.setFixedSize(self.size())
 
     async def ashow(self):
         # self.show()

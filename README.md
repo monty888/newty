@@ -13,10 +13,19 @@ pip install .
 # account
 Keystore for nostr accounts.
 
-![nostr basic query tool](account.png) 
+![create accounts](account.png) 
 ```shell
 TODO...
 ```
+
+# signer
+Basic NIP46 signer app, accounts can be created imported using the account app.
+
+![NIP46 signer](signer.png) 
+```shell
+python -m newty.signer_app
+```
+
 
 # basic query
 Make basic query request to nostr relays.  

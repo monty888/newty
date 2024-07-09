@@ -45,10 +45,17 @@ def load_toml(filename, dir, current_args):
 def get_sqlite_key_store(db_file, password: str = None):
     my_diag = PasswordDialog()
     async def get_password() -> str:
+        nonlocal password
         ret = password
         if password is None:
-            await my_diag.ashow()
-            ret = my_diag.password
+            if await my_diag.ashow():
+                ret = my_diag.password
+            elif ret is None:
+                raise ConfigError('no password!!')
+
+        # set as given for future
+        password = ret
+
         return ret
 
     key_enc = NIP49KeyDataEncrypter(get_password=get_password)
